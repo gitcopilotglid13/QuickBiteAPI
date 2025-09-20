@@ -223,5 +223,91 @@ namespace QuickBiteAPI.Tests
             // Assert
             Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
         }
+
+        [Fact]
+        public async Task SearchMenuItems_WithValidSearchTerm_ShouldReturnMatchingItems()
+        {
+            // Arrange - Create test data
+            var testItems = new List<MenuItem>
+            {
+                new MenuItem { Name = "Margherita Pizza", Description = "Classic pizza", Price = 12.99m, Category = "Pizza", DietaryTag = "Vegetarian" },
+                new MenuItem { Name = "Pepperoni Pizza", Description = "Pizza with pepperoni", Price = 14.99m, Category = "Pizza", DietaryTag = "Non-Vegetarian" },
+                new MenuItem { Name = "Caesar Salad", Description = "Fresh salad", Price = 8.99m, Category = "Salad", DietaryTag = "Vegetarian" }
+            };
+
+            foreach (var item in testItems)
+            {
+                await _client.PostAsJsonAsync("/api/menuitems", item);
+            }
+
+            // Act - Search for "Pizza"
+            var response = await _client.GetAsync("/api/menuitems/search/Pizza");
+
+            // Assert
+            response.EnsureSuccessStatusCode();
+            var searchResults = await response.Content.ReadFromJsonAsync<List<MenuItem>>();
+            Assert.NotNull(searchResults);
+            Assert.Equal(2, searchResults.Count);
+            Assert.All(searchResults, item => Assert.Contains("Pizza", item.Name));
+        }
+
+        [Fact]
+        public async Task SearchMenuItems_WithEmptySearchTerm_ShouldReturnBadRequest()
+        {
+            // Act
+            var response = await _client.GetAsync("/api/menuitems/search/");
+
+            // Assert
+            Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        }
+
+        [Fact]
+        public async Task SearchMenuItems_WithSpecialCharacters_ShouldHandleGracefully()
+        {
+            // Arrange - Create item with special characters
+            var specialItem = new MenuItem 
+            { 
+                Name = "Pizza & Pasta Combo", 
+                Description = "Special combo with @ symbols", 
+                Price = 16.99m, 
+                Category = "Combo", 
+                DietaryTag = "Non-Vegetarian" 
+            };
+            await _client.PostAsJsonAsync("/api/menuitems", specialItem);
+
+            // Act - Search with special characters
+            var response = await _client.GetAsync("/api/menuitems/search/Pizza%20%26");
+
+            // Assert
+            response.EnsureSuccessStatusCode();
+            var searchResults = await response.Content.ReadFromJsonAsync<List<MenuItem>>();
+            Assert.NotNull(searchResults);
+            Assert.Single(searchResults);
+        }
+
+        [Fact]
+        public async Task SearchMenuItems_CaseInsensitive_ShouldReturnResults()
+        {
+            // Arrange
+            var testItem = new MenuItem 
+            { 
+                Name = "Chicken Burger", 
+                Description = "Delicious burger", 
+                Price = 9.99m, 
+                Category = "Burger", 
+                DietaryTag = "Non-Vegetarian" 
+            };
+            await _client.PostAsJsonAsync("/api/menuitems", testItem);
+
+            // Act - Search with different case
+            var response = await _client.GetAsync("/api/menuitems/search/Chicken");
+
+            // Assert
+            response.EnsureSuccessStatusCode();
+            var searchResults = await response.Content.ReadFromJsonAsync<List<MenuItem>>();
+            Assert.NotNull(searchResults);
+            Assert.Single(searchResults);
+            Assert.Equal("Chicken Burger", searchResults[0].Name);
+        }
     }
 }
